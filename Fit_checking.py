@@ -4,17 +4,22 @@ warnings.filterwarnings('ignore')
 import numpy as np 
 import os
 import time
+import tempfile 
+import subprocess 
 
+from PIL import Image
+import pandas as pd
+from IPython.display import display, clear_output
 
 import nds2
 import pickle
 import sys
 from io import StringIO  
-
+import glob 
 import openpyxl 
 import string
-import dcc 
-import subprocess
+#import dcc 
+#import subprocess
 import matplotlib.pyplot as plt 
 
 from tqdm.notebook import tqdm
@@ -26,7 +31,7 @@ matplotlib.rcParams.update({'font.size': 14})
 matplotlib.rcParams.update({'figure.figsize': (10,6)})
 
 def save_fig(fig_id, tight_layout=True):
-    path = fig_id + '.png'
+    pathxx = fig_id + '.png'
     print('Saving figure', fig_id)
     if tight_layout:
         plt.tight_layout()
@@ -105,40 +110,46 @@ def find_fit_images_and_results_files(subdirectory_paths):
     return fit_images_dict, results_files_dict
 
 def print_verbose_outputs(matching_folders, all_serials_found, date_matching_subdirectories, subdirectory_paths, fit_images_dict, results_files_dict):
-    print("Matching Folders:", matching_folders)
-    print("All Serials Found:", all_serials_found)
+    print("Matching Folders: {}".format(matching_folders))
+    print("All Serials Found: {}".format(all_serials_found))
     print("Date Matching Subdirectories:")
     for folder, subdirectories in date_matching_subdirectories.items():
-        print(f"{folder}: {subdirectories}")
+        print("{}: {}".format(folder, subdirectories))
     print("Sorted Subdirectory Paths:")
     for path in subdirectory_paths:
-        print(path)
+        print("{}".format(path))
     print("Fit Images Dictionary:")
     for serial, fit_images in fit_images_dict.items():
-        print(f"Serial {serial}: {fit_images}")
+        print("Serial {}: {}".format(serial, fit_images))
     print("Results Files Dictionary:")
     for serial, results_files in results_files_dict.items():
-        print(f"Serial {serial}: {results_files}")
+        print("Serial {}: {}".format(serial, results_files))
+
 
 def print_summary_outputs(matching_folders, all_serials_found, date_matching_subdirectories, subdirectory_paths, fit_images_dict, results_files_dict):
-    print("Number of Matching Folders:", len(matching_folders))
-    print("All Serials Found:", all_serials_found)
+    print("Number of Matching Folders: {}".format(len(matching_folders)))
+    print("All Serials Found: {}".format(all_serials_found))
     print()
-    #print("Number of Date Matching Subdirectories:")
-    for folder, subdirectories in date_matching_subdirectories.items():
-        print(f"{folder}: {len(subdirectories)} measurements")
-    #print("Number of Subdirectory Paths:", len(subdirectory_paths))
-    #print("Number of Fit Images Dictionary Entries:", len(fit_images_dict))
-    print()
-    print("Number of Results Files Dictionary Entries:", len(results_files_dict))
     
+    for folder, subdirectories in date_matching_subdirectories.items():
+        print("{}: {} measurements".format(folder, len(subdirectories)))
+    
+    print()
+    print("Number of Results Files Dictionary Entries: {}".format(len(results_files_dict)))
+
     
     
 def prompt_user_to_keep_fit(image_path):
-    # Display the image to the user
-    img = Image.open(image_path)
-    img.show()
+    with Image.open(image_path) as img:
+        subprocess.Popen(['feh',image_path])
+        
+        #with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
+            #img.save(f.name)
+            #print(f.name)
+            # Use subprocess to open the image with the default viewer
+            #subprocess.Popen(['feh' '"' , f.name, '"'])
 
+            
     # Prompt the user for input
     while True:
         user_input = input("Press Enter to keep this fit, otherwise press 'n': ").strip().lower()
@@ -161,16 +172,14 @@ def process_fit_images(serial, fit_images):
             'Image Filename': os.path.basename(image_path),
             'Keep Fit': keep_fit
         })
+    return fit_responses
 
-    
-    
-    
-    
+
     
     
 
 def main(serials, directory_path, date=None, verbose=True):
-        """
+    """
     Main function to find matching folders, subdirectories, fit images, and results files
     within a specified directory.
 
@@ -194,10 +203,30 @@ def main(serials, directory_path, date=None, verbose=True):
     else:
         print_summary_outputs(matching_folders, all_serials_found, date_matching_subdirectories, subdirectory_paths, fit_images_dict, results_files_dict)
         
+     # Process fit images for each serial
+    fit_responses_list = []
+    
+    for serial in serials:
+        if serial in fit_images_dict:
+            fit_responses = process_fit_images(serial, fit_images_dict[serial])
+            fit_responses_list.append(fit_responses)
+
+    # Concatenate the results into a single DataFrame
+    fit_responses_df = pd.concat(fit_responses_list, ignore_index=True)
+
+    # Print or return the DataFrame
+    if verbose:
+        print("Fit Responses:")
+        display(fit_responses_df)
+    else:
+        return fit_responses_df
         
-serials = ['S1600962', 'S1600963', 'S1600964', 'S1600965']
+        
+        
+        
+serials = ['S1600962']#, 'S1600963', 'S1600964', 'S1600965']
 date = '2024_01_22'  # Replace with the date you want to match
 directory_path =   "/mnt/data/Notebooks/CRIME/results" # Replace with the actual directory path
-verbose = False  # Set to True for detailed outputs or False for summarized outputs
+verbose = False   # Set to True for detailed outputs or False for summarized outputs
 
 main(serials, directory_path, date, verbose)
