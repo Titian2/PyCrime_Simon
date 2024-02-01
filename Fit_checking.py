@@ -11,14 +11,14 @@ from PIL import Image
 import pandas as pd
 from IPython.display import display, clear_output
 
-import nds2
-import pickle
 import sys
+import psutil
+import platform
 from io import StringIO  
 import glob 
 import openpyxl 
 import string
-#import dcc 
+#import dcc py
 #import subprocess
 import matplotlib.pyplot as plt 
 
@@ -141,7 +141,30 @@ def print_summary_outputs(matching_folders, all_serials_found, date_matching_sub
     
 def prompt_user_to_keep_fit(image_path):
     with Image.open(image_path) as img:
-        subprocess.Popen(['feh',image_path])
+        try:
+            # Determine the operating system
+            operating_system = platform.system()
+
+            # Check if the operating system is Debian (Linux)
+            if operating_system == 'Linux':
+                viewer_command = 'feh'
+            elif operating_system == 'Darwin':  # macOS
+                viewer_command = 'open'
+            elif operating_system == 'Windows':
+                viewer_command = 'start'
+            else:
+                raise NotImplementedError("Viewer not supported on this operating system.")
+
+            # Open the image with the appropriate viewer
+            viewer_process = subprocess.Popen([viewer_command, image_path])
+
+            # Wait for the viewer process to finish
+            viewer_process.wait()
+
+            
+        except Exception as e:
+            print(f"Image could not be displayed : {str(e)}")
+           
         
         #with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
             #img.save(f.name)
@@ -153,10 +176,13 @@ def prompt_user_to_keep_fit(image_path):
     # Prompt the user for input
     while True:
         user_input = input("Press Enter to keep this fit, otherwise press 'n': ").strip().lower()
+        
         if user_input == "":
             return True
         elif user_input == "n":
             return False
+        
+    
 
 def process_fit_images(serial, fit_images):
     fit_responses = []
@@ -164,6 +190,7 @@ def process_fit_images(serial, fit_images):
     # Iterate through fit images
     for image_path in fit_images:
         # Prompt user to keep the fit
+        
         keep_fit = prompt_user_to_keep_fit(image_path)
 
         # Store the result
@@ -172,7 +199,34 @@ def process_fit_images(serial, fit_images):
             'Image Filename': os.path.basename(image_path),
             'Keep Fit': keep_fit
         })
+        
+        
     return fit_responses
+
+
+def create_dataframe(data,output_file_path=os.getcwd()):
+    # Create a DataFrame from the list of dictionaries
+    fit_images_dict = data 
+    print(fit_images_dict)
+    
+    sorted_values = sorted(data, key=lambda x: x['Image Filename'])
+
+    # Print the sorted data
+    for entry in sorted_values:
+        print(entry)
+
+    # Create a new DataFrame with columns 'File Path', 'Index', 'Extracted Value', and 'File Name'
+    df = pd.DataFrame(sorted_values, columns=['Frequency', 'File Path'])
+    df['Extracted Value'] = df['File Path'].str.extract(r'fit_(\d+)\.png').fillna(-1).astype(int)
+    df['File Path'] = df['File Path'].astype(str)  # Convert 'File Path' column to strings
+
+    df['File Name'] = df['File Path'].str.split('/').str[-1]  # Extract the file name with "fit_" and ".png"
+
+    df = df[['Frequency','Extracted Value','File Name','File Path']]
+    # Save the DataFrame to a tab-delimited text file
+    df.to_csv(os.path.join(output_file_path,'testing.txt'), sep='\t', index=False)
+    
+    return df
 
 
     
@@ -207,10 +261,18 @@ def main(serials, directory_path, date=None, verbose=True):
     fit_responses_list = []
     
     for serial in serials:
+        time.sleep(2)
         if serial in fit_images_dict:
             fit_responses = process_fit_images(serial, fit_images_dict[serial])
+            
             fit_responses_list.append(fit_responses)
 
+    df = create_dataframe(fit_responses)
+    df = df.sort_values(by='frequency')
+    # Print the DataFrame
+    print(df)
+    
+    
     # Concatenate the results into a single DataFrame
     fit_responses_df = pd.concat(fit_responses_list, ignore_index=True)
 
@@ -226,7 +288,7 @@ def main(serials, directory_path, date=None, verbose=True):
         
 serials = ['S1600962']#, 'S1600963', 'S1600964', 'S1600965']
 date = '2024_01_22'  # Replace with the date you want to match
-directory_path =   "/mnt/data/Notebooks/CRIME/results" # Replace with the actual directory path
+directory_path =   "/Volumes/UNTITLED/" # Replace with the actual directory path
 verbose = False   # Set to True for detailed outputs or False for summarized outputs
 
 main(serials, directory_path, date, verbose)
