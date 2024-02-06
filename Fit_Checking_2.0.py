@@ -315,15 +315,17 @@ def image_paths_for_group(group_label, group_indices, fit_images,verbose):
     
     
     indices = group_indices.get(group_label, [])
+   
+       
+       
+    img_paths = [fit_images[i] for i in indices if i < len(fit_images)]
     if verbose: 
         print(f"Group {group_label} Indices: {indices}")  # Debugging print
         print(f"Image Paths for Group {group_label}: {img_paths}")  # Debugging print
-    img_paths = [fit_images[i] for i in indices if i < len(fit_images)]
-    
        
     return img_paths
     
-def plot_group_error_bars(all_averages, all_std_devs, group_label,sample_name,date_string):
+def plot_group_error_bars(all_averages, all_std_devs, group_label,sample_name,date_string,verbose):
     """
     Plot error bars for the specified group and save the figure with a name that includes the date string.
     
@@ -343,8 +345,8 @@ def plot_group_error_bars(all_averages, all_std_devs, group_label,sample_name,da
 
     Q1_UpperCi_list = [std_devs['Q1_CI'] for std_devs in all_std_devs.values() if 'Q1_CI' in std_devs]
     Q1_LowerCi_list = [std_devs['Q1_CI'] for std_devs in all_std_devs.values() if 'Q1_CI' in std_devs]
-    Q2_UpperCi_list = [std_devs['Q1_CI.1'] for std_devs in all_std_devs.values() if 'Q1_CI.1' in std_devs]
-    Q2_LowerCi_list = [std_devs['Q1_CI.1'] for std_devs in all_std_devs.values() if 'Q1_CI.1' in std_devs]
+    Q2_UpperCi_list = [std_devs['Q2_CI.1'] for std_devs in all_std_devs.values() if 'Q2_CI.1' in std_devs]
+    Q2_LowerCi_list = [std_devs['Q2_CI.1'] for std_devs in all_std_devs.values() if 'Q2_CI.1' in std_devs]
 
     # Convert the lists to NumPy arrays
     Freq_values_array = np.array(Freq_values_list)
@@ -382,8 +384,8 @@ def plot_group_error_bars(all_averages, all_std_devs, group_label,sample_name,da
         print(df)
         
     plt.figure(figsize=(10, 6))
-    plt.errorbar(Freq_values_array,1/Q1_values_array,Q1_UpperCi_array-Q1_LowerCi_array, marker ='o',  linestyle='None', label ='Phi 1') 
-    plt.errorbar(Freq_values_array,1/Q2_values_array,Q2_UpperCi_array-Q2_LowerCi_array, marker ='^',   linestyle='None',label ='Phi 2') 
+    plt.errorbar(Freq_values_array,1/Q1_values_array,1/(Q1_UpperCi_array-Q1_LowerCi_array), marker ='o',  linestyle='None', label ='Phi 1') 
+    plt.errorbar(Freq_values_array,1/Q2_values_array,1/(Q2_UpperCi_array-Q2_LowerCi_array), marker ='^',   linestyle='None',label ='Phi 2') 
     plt.yscale('log')
     plt.grid()
     plt.xlabel('Frequency (Hz)')
@@ -404,107 +406,106 @@ class Args:
         self.sample_name = sample_name
         self.verbose = verbose
 
-# Example usage, mimicking command-line input:
-args = Args(date_string="2023_08_24", sample_name="S1600962", verbose=False)
+## Example usage, mimicking command-line input:
+#args = Args(date_string="2023_08_24", sample_name="S1600962", verbose=False)
 
 
 
-#def main():
-#parser = argparse.ArgumentParser(description='Process some data.')
-#parser.add_argument('date_string', type=str, help='Date string in YYYY_MM_DD format')
-#parser.add_argument('sample_name', type=str, help='Name of the sample')
-#parser.add_argument('--verbose', action='store_true', help='Increase output verbosity')
+def main():
+    parser = argparse.ArgumentParser(description='Process some data.')
+    parser.add_argument('sample_name', type=str, help='Name of the sample')
+    parser.add_argument('date_string', type=str, help='Date string in YYYY_MM_DD format')
+    parser.add_argument('--verbose', action='store_true', help='Increase output verbosity')
 
-#args = parser.parse_args()
+    args = parser.parse_args()
 
+    config = read_config('config.ini')
+    base_dir = Path(config.get('Paths', 'BaseDir', fallback='/Volumes/UNTITLED/')) / get_sample_name(args.sample_name)
 
+    logging.info(f'Sample Name: {base_dir.name}')
 
+    folders = get_folders(base_dir)
+    dates, letters, matched_folders = process_folders(folders, args.date_string, args.verbose)
 
-
-
-config = read_config('config.ini')
-base_dir = Path(config.get('Paths', 'BaseDir', fallback='/Volumes/UNTITLED/')) / get_sample_name(args.sample_name)
-
-logging.info(f'Sample Name: {base_dir.name}')
-
-folders = get_folders(base_dir)
-dates, letters, matched_folders = process_folders(folders, args.date_string, args.verbose)
-
-all_data, fit_images, results_files = read_and_process_files(matched_folders, base_dir,args.verbose)
+    all_data, fit_images, results_files = read_and_process_files(matched_folders, base_dir,args.verbose)
 
 
 
-# Initial cluster count
-unique_counts = len(np.unique(np.ceil(all_data['Freq'] / 100) * 100))
+    # Initial cluster count
+    unique_counts = len(np.unique(np.ceil(all_data['Freq'] / 100) * 100))
 
-print("Clustering...")
-# Perform initial clustering
-group_indices, data , group_labels  = perform_dbscan_analysis(all_data, 'Freq',args.verbose, eps=0.5, min_samples=5)
+    print("Clustering...")
+    # Perform initial clustering
+    group_indices, data , group_labels  = perform_dbscan_analysis(all_data, 'Freq',args.verbose, eps=0.5, min_samples=5)
 
-labels = group_labels
+    labels = group_labels
 
-# Adding the 'Group' column to 'data'
-data['Group'] = labels
-
-# Check cluster count and get user decision
-if np.size(np.unique(group_labels)) !=18:
-
-    decision = get_user_decision_on_cluster_count(len(group_labels),data)
-
-    # If user provides a new cluster count
-    if isinstance(decision, int):
-        unique_counts = decision
-        group_indices = perform_kmeans_analysis(all_data,unique_counts)
-        group_labels = list(group_indices.keys())
-else:
-    decision = True
-    print('All Frequencies Identified!')
-
-if decision:
+    # Adding the 'Group' column to 'data'
+    data['Group'] = labels
     
-    # Assuming group_labels contains the labels of each group you want to process
-    group_labels = sorted(group_indices.keys())  # Sorting the group labels for consistent processing order
-    fit_checks_by_group = {}  # Initialize a dictionary to store fit checks by group
+    plot_data(data)
+    raise
+    # Check cluster count and get user decision
+    if np.size(np.unique(group_labels)) !=18:
 
-    all_averages = {}
-    all_std_devs = {}
+        decision = get_user_decision_on_cluster_count(len(group_labels),data)
 
-    for group_label in group_labels:
-        # Get the relevant image paths for this group
-        img_paths = image_paths_for_group(group_label, group_indices, fit_images,args.verbose)
-        
-        # Perform user fit check for the current group
-        fit_checks = user_fit_check(img_paths)
-        
-        # Filter the data for the current group
-        group_data = data[data['Group'] == group_label]
-        
-        # Ensure group_data has the same number of rows as there are fit_checks
-        if len(group_data) != len(fit_checks):
-            print(f"Warning: Mismatch in number of fit checks ({len(fit_checks)}) and data rows ({len(group_data)}) for group {group_label}")
-            continue  # Skip to the next group or handle this case as needed
-        
-        # Add fit_checks to group_data
-        group_data = group_data.assign(FitCheck=pd.Series(fit_checks).values)
-        
-        # Process data and calculate averages
-        averages, std_devs = process_data_and_calculate_averages(group_data, fit_checks, group_label)
-        
-        # Store the results in dictionaries indexed by group_label
-        all_averages[group_label] = averages
-        all_std_devs[group_label] = std_devs
-        
+        # If user provides a new cluster count
+        if isinstance(decision, int):
+            unique_counts = decision
+            group_indices = perform_kmeans_analysis(all_data,unique_counts)
+            group_labels = list(group_indices.keys())
+    else:
+        decision = True
+        print('All Frequencies Identified!')
 
-    # Now plot the error bars using the averages and std_devs
-    plot_group_error_bars(all_averages, all_std_devs, group_label,args.sample_name,args.date_string)
+    if decision:
+        
+        # Assuming group_labels contains the labels of each group you want to process
+        group_labels = sorted(group_indices.keys())  # Sorting the group labels for consistent processing order
+        fit_checks_by_group = {}  # Initialize a dictionary to store fit checks by group
 
-else:
-        print(f"Correct Number of clusers could not be found. Exciting...")
-        raise 
+        all_averages = {}
+        all_std_devs = {}
+        all_group_data = {}
+        for group_label in group_labels:
+            # Get the relevant image paths for this group
+            img_paths = image_paths_for_group(group_label, group_indices, fit_images,args.verbose)
+            
+            # Perform user fit check for the current group
+            fit_checks = user_fit_check(img_paths)
+            
+            # Filter the data for the current group
+            group_data = data[data['Group'] == group_label]
+            
+            # Ensure group_data has the same number of rows as there are fit_checks
+            if len(group_data) != len(fit_checks):
+                print(f"Warning: Mismatch in number of fit checks ({len(fit_checks)}) and data rows ({len(group_data)}) for group {group_label}")
+                continue  # Skip to the next group or handle this case as needed
+            
+            # Add fit_checks to group_data
+            group_data = group_data.assign(FitCheck=pd.Series(fit_checks).values)
+            
+            # Process data and calculate averages
+            averages, std_devs = process_data_and_calculate_averages(group_data, fit_checks, group_label)
+            
+            # Store the results in dictionaries indexed by group_label
+            all_averages[group_label] = averages
+            all_std_devs[group_label] = std_devs
+            all_group_data[group_label] = group_data
+        print(all_group_data)        
+
+        # Now plot the error bars using the averages and std_devs
+        Final_Dataframe =  plot_group_error_bars(all_averages, all_std_devs, group_label,args.sample_name,args.date_string,args.verbose)
+        Final_Dataframe.to_csv('Final_outputs.txt', sep='\t', index=False)
+
+    else:
+            print(f"Correct Number of clusers could not be found. Exciting...")
+            raise 
 
 
 
    
 
-#if __name__ == "__main__":
-#    main()
+if __name__ == "__main__":
+    main()
