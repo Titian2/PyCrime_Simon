@@ -292,7 +292,7 @@ def user_fit_check(image_paths,verbose, max_figsize=(10, 8)):
     return fit_checks
 
 
-def process_data(filtered_data):
+def process_data(filtered_data,group_label):
     
     filtered_data['Group'] = group_label  
     
@@ -442,7 +442,7 @@ def main():
     parser = argparse.ArgumentParser(description='Process some data.')
     parser.add_argument('sample_name', type=str, help='Name of the sample')
     parser.add_argument('date_string', type=str, help='Date string in YYYY_MM_DD format')
-    parser.add_argument('--verbose', action='store_true', help='Increase output verbosity'  
+    parser.add_argument('--verbose', action='store_true', help='Increase output verbosity' )
     args = parser.parse_args()
 
     config = read_config('config.ini')
@@ -519,7 +519,7 @@ def main():
             
             print(f"Group Label: {group_label}")
             if group_label<0: 
-            group_data = data[data['Group']<0]
+                group_data = data[data['Group']<0]
             else:
                 group_data = data[data['Group']==group_label]
             
@@ -547,7 +547,7 @@ def main():
 
             # Check if the number of rows in group_data is greater than 5
             if len(group_data) > 5:  # Corrected to use len() for clarity
-                processed_data = process_data(group_data)
+                processed_data = process_data(group_data,group_label)
             else:
                 processed_data = group_data
 
