@@ -17,6 +17,8 @@ import math
 import warnings
 from scipy import stats
 import numpy_groupies as npg 
+from tabulate import tabulate  # If you don't have tabulate, you can use a simple print format
+
 
 
 import matplotlib
@@ -24,7 +26,7 @@ matplotlib.use('TkAgg')  # Use Tkinter-based backend
 import matplotlib.pyplot as plt
 
 # Suppress all warnings
-warnings.filterwarnings('ignore')
+
 
 
 
@@ -58,7 +60,7 @@ def process_folders(folders: List[str], date_string: str, verbose: bool) -> Tupl
         try:
             if re.match(rf'{date_string}[a-zA-Z]*_CR', folder):
                 matched_folders.append(folder)
-                logging.info(f"Matched folder: {folder}")
+#                logging.info(f"Matched folder: {folder}")
 
                 # Extracting the letter part
                 letter_match = re.search(rf'{date_string}([a-zA-Z]*)_CR', folder)
@@ -104,26 +106,27 @@ def find_matching_image(freq, fit_images):
     # If no match is found with either, return None
     return None
 
-def read_and_process_files(folders, base_dir,verbose):
+def read_and_process_files(folders, base_dir,dates,verbose):
     
-    all_data = pd.DataFrame()
-    matched_fit_images = []
-    matched_results_files = []
-    
-    if verbose: 
-        print("{:<40} {:<15} {:<15}".format("Fit Image", "Image Freq", "Results Freq"))
-        print("-" * 70)
-
+    entries_info = []  # To store info about each file
+    all_data = pd.DataFrame()  # To store all data concatenated
+    matched_fit_images = []  # To store matched fit images
+    matched_results_files = []  # To store matched results files
 
     for folder in folders:
         fit_images = glob.glob(os.path.join(base_dir, folder, 'fit*.png'))
         folder_result_files = glob.glob(os.path.join(base_dir, folder, 'results*.txt'))
-    
+
         for result_file in folder_result_files:
             temp_df = pd.read_csv(result_file, sep='\t', skiprows=[0], header=None, engine='python')
             temp_df = temp_df.dropna(axis=1, how='all')
             temp_df.columns = ['Freq', 'Q1', 'Q2', 'Q1_UpperCI', 'Q1_LowerCI', 'Q2_UpperCI', 'Q2_LowerCI', 'mode(m)', 'mode(n)']
 
+            # Track the number of entries in this file
+            num_entries = len(temp_df)
+            entries_info.append({'Measurement Folder': folder, 'Number of Measurements': num_entries})
+            
+        
 
             for _, row in temp_df.iterrows():
                 freq = row['Freq']
@@ -136,12 +139,30 @@ def read_and_process_files(folders, base_dir,verbose):
                     if verbose:
                         print("{:<40} {:<15} {:<15}".format(os.path.basename(matching_image), img_freq, str(freq)))
                 else:
-                    
                     print(f"No matching fit image found for frequency {freq} in {result_file}")
-            
+
             all_data = pd.concat([all_data, temp_df], ignore_index=True)
-      
-    return  all_data, matched_fit_images, matched_results_files
+
+    # Calculate the total number of measurements
+    total_measurements = sum(entry['Number of Measurements'] for entry in entries_info)
+
+    # Add total measurements to the entries info for display
+    entries_info.append({'Measurement Folder': 'Total', 'Number of Measurements': total_measurements})
+
+    # Print the information in a table format
+    print(tabulate(entries_info, headers='keys', tablefmt='pretty'))  # If you don't have tabulate, replace this line with a loop to print each row
+    
+    
+    if num_entries < 15:
+            print()
+            warnings.warn(f"The number of measurements in {dates[0]}\n might cause issues with the rest of the analysis.")
+            user_decision = input("Do you want to proceed despite the low number of measurements? (Y/N): ")
+            if user_decision.strip().upper() != 'Y':
+                return 
+
+
+    
+    return all_data, matched_fit_images, matched_results_files,entries_info
 
 def perform_kmeans_analysis(data,unique_counts):
     # Assuming 'Freq' is a column in your DataFrame
@@ -400,8 +421,11 @@ def calculate_group_stats_and_plot(filtered_group_data,sample_name,date_string,b
         plt.legend()
         plt.xlabel('Frequency [Hz')
         fig.canvas.manager.window.geometry("1000x800+100+100")
-        plt.ylabel(r'Average Mechanical Loss [$phi_{mech}$]')
-        plt.show()
+        plt.ylabel(r'Average Mechanical Loss [$\phi_{mech}$]')
+        plt.grid()
+        plt.legend
+        
+        
         
               
         # Saving the figure
@@ -454,7 +478,7 @@ def main():
     dates, letters, matched_folders = process_folders(folders, args.date_string, args.verbose)
 
     time.sleep(2)
-    all_data, fit_images, results_files = read_and_process_files(matched_folders, base_dir,args.verbose)
+    all_data, fit_images, results_files,entries_info = read_and_process_files(matched_folders, base_dir,dates,args.verbose)
 
     # Initial cluster count
     unique_counts = len(np.unique(np.ceil(all_data['Freq'] / 100) * 100))

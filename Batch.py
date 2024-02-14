@@ -3,7 +3,7 @@ import re
 from collections import Counter, defaultdict
 import subprocess 
 
-SampleName = 'S1600962'
+SampleName = 'S1600966'
 
 # Define the base directory
 base_directory = os.path.join('/Users/Simon/Desktop/CRIME_BACKUP/',SampleName)
@@ -41,20 +41,22 @@ for date, directory in zip(dates, date_directories):
 
 
 #for date, directories in date_directory_dict.items():
-#    print(f'Date: {date}')
-#    for directory in directories:
-#        print(f'  {directory}')
-    
-print(f'\nSample Name:\t{SampleName}\n')
+#        print(f'Date: {date}')
 
-for date in unique_dates:
-    print(f'{date:<18} {date_counts[date]}')    
-        
-    # Call your Python function with the appropriate arguments
-    command = f"python Fit_Checking_2.0.py {SampleName} {date}"
     
-    # You can use subprocess to run the command if needed
+print(f'\nSample Name:\t{SampleName}')
+
+
+verbose = '' 
+for date in (list(unique_dates))[2:]:
+    print(f"Analysis Date:\t{date:<18}\n")
+    
+    command = f"python Fit_Checking_2.0.py {SampleName} {date} {verbose}"
+    #print(f"{date:<18} {date_counts[date]}")
     subprocess.call(command, shell=True)
+
+    
+    
     
     
     
