@@ -1,0 +1,10 @@
+numpy
+matplotlib
+scipy
+
+tqdm
+pandas
+numpy_groupies
+
+pylab 
+ipython

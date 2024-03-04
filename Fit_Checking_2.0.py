@@ -5,6 +5,8 @@ import pandas as pd
 import numpy as np
 import time 
 import logging
+from pathlib import Path
+from typing import List
 import configparser
 import glob 
 from PIL import Image
@@ -27,9 +29,6 @@ import matplotlib.pyplot as plt
 
 # Suppress all warnings
 
-
-
-
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -43,7 +42,7 @@ def get_sample_name(sample_name: str) -> str:
     """Returns the sample name."""
     return sample_name
 
-def get_folders(base_dir: Path) -> List[str]:
+def get_folders(base_dir: Path)-> List[str]:
     """Retrieves folders in the base directory."""
     try:
         directories = [d for d in os.listdir(base_dir) if os.path.isdir(os.path.join(base_dir, d))]
@@ -60,7 +59,7 @@ def process_folders(folders: List[str], date_string: str, verbose: bool) -> Tupl
         try:
             if re.match(rf'{date_string}[a-zA-Z]*_CR', folder):
                 matched_folders.append(folder)
-#                logging.info(f"Matched folder: {folder}")
+                logging.info("Matched folder: {0}".format(folder))
 
                 # Extracting the letter part
                 letter_match = re.search(rf'{date_string}([a-zA-Z]*)_CR', folder)
@@ -69,12 +68,12 @@ def process_folders(folders: List[str], date_string: str, verbose: bool) -> Tupl
                     dates.append(date_string)
                     letters.append(letter)
                 elif verbose:
-                    logging.warning(f"Letter pattern not found in folder '{folder}'")
-            elif verbose:
-                logging.warning(f"Folder '{folder}' does not match the provided date '{date_string}'")
+                    logging.warning("Letter pattern not found in folder '{0}'".format(folder))
+                elif verbose:
+                    logging.warning(f"Folder '{folder}' does not match the provided date '{date_string}'")
         except Exception as e:
-            logging.error(f"Error processing folder '{folder}': {e}")
-
+            logging.error("Error processing folder '{0}': {1}".format(folder, e))
+            
     if matched_folders:
         print()
         logging.info(f"Total matched folders: {len(matched_folders)}")
@@ -204,9 +203,6 @@ def perform_dbscan_analysis(data, column_name,verbose,eps=0.5, min_samples=2):
 
     # Creating a dictionary to hold indices for each cluster
     group_indices = {label: np.where(labels == label)[0] for label in unique_labels}
-    
-    
-    
     
     return group_indices, data , labels 
 
@@ -405,6 +401,8 @@ def calculate_group_stats_and_plot(filtered_group_data,sample_name,date_string,b
         Frequencies  = filtered_group_data[filtered_group_data['FitCheck']==True]['Freq']
         Q1Values = filtered_group_data[filtered_group_data['FitCheck']==True]['Q1']
         Q2Values = filtered_group_data[filtered_group_data['FitCheck']==True]['Q2']
+        mode_m_values = filtered_group_data[filtered_group_data['FitCheck']==True]['mode(m)']
+        mode_n_values = filtered_group_data[filtered_group_data['FitCheck']==True]['mode(n)']
         
         freq = npg.aggregate(np.array(group_idx).astype(int)+1, np.array(Frequencies), func='mean')
         Q1means =  npg.aggregate(np.array(group_idx).astype(int)+1, np.array(Q1Values), func='mean')
@@ -413,6 +411,10 @@ def calculate_group_stats_and_plot(filtered_group_data,sample_name,date_string,b
         Q2max   =  npg.aggregate(np.array(group_idx).astype(int)+1, np.array(Q2Values), func='max')
         Q1min   =  npg.aggregate(np.array(group_idx).astype(int)+1, np.array(Q1Values), func='min')
         Q2min   =  npg.aggregate(np.array(group_idx).astype(int)+1, np.array(Q2Values), func='min')
+        Q1std   =  npg.aggregate(np.array(group_idx).astype(int)+1, np.array(Q1Values), func='std')
+        Q2std   =  npg.aggregate(np.array(group_idx).astype(int)+1, np.array(Q2Values), func='std')
+        m   =  npg.aggregate(np.array(group_idx).astype(int)+1, np.array(Q2Values), func='mean')
+        n   =  npg.aggregate(np.array(group_idx).astype(int)+1, np.array(Q2Values), func='mean')
 
         fig, ax = plt.subplots()
         plt.errorbar(freq,1/Q1means,[np.abs(1/Q1max-1/Q1means),np.abs(1/Q1means-1/Q1min)],marker= 'o',color ='b', linestyle='None')
@@ -426,8 +428,6 @@ def calculate_group_stats_and_plot(filtered_group_data,sample_name,date_string,b
         plt.legend
         
         
-        
-              
         # Saving the figure
         filename = f'AverageLoss_{sample_name}_{date_string}.png'
         plt.savefig(os.path.join(base_dir,filename))
@@ -442,6 +442,10 @@ def calculate_group_stats_and_plot(filtered_group_data,sample_name,date_string,b
             'Q2 Max': Q2max,
             'Q1 Min': Q1min,
             'Q2 Min': Q2min,
+            'Q1 Std': Q1std,
+            'Q2 Std': Q2std,
+            'm': mode_m_values,
+            'n': mode_n_values
             })
         
    
@@ -468,6 +472,8 @@ def main():
     parser.add_argument('date_string', type=str, help='Date string in YYYY_MM_DD format')
     parser.add_argument('--verbose', action='store_true', help='Increase output verbosity' )
     args = parser.parse_args()
+    
+    print(args)
 
     config = read_config('config.ini')
     base_dir = Path(config.get('Paths', 'BaseDir', fallback='/Volumes/UNTITLED/')) / get_sample_name(args.sample_name)
@@ -595,10 +601,6 @@ def main():
     else:
             print(f"Correct Number of clusers could not be found. Exciting...")
             raise 
-
-
-
-
 
 if __name__ == "__main__":
     main()
